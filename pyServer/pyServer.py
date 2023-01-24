@@ -59,7 +59,7 @@ def parse_jupeserv_auth(data):
     password = data[5].strip(NEW_LINES)
     password = "(" + str(JUPESERV_SALT) + ":" + password + ")"
     password = password.encode("UTF-8")
-    output = hashlib.sha512(password).hexdigest()
+    output = hashlib.sha512(password).hexdigest().lower()
     if JUPESERV_USERS[account] != output:
         sendString(data[0], "That password is incorrect.")
         return
@@ -90,7 +90,7 @@ def parse_jupeserv_mkpasswd(data):
     userInput = data[4].strip(NEW_LINES)
     userInput = "(" + str(JUPESERV_SALT) + ":" + userInput + ")"
     userInput = userInput.encode("UTF-8")
-    output = hashlib.sha512(userInput).hexdigest()
+    output = hashlib.sha512(userInput).hexdigest().lower()
     sendString(data[0], "Hash: " + output)
 
 def parse_jupeserv_raw(data):
@@ -104,6 +104,9 @@ def parse_jupeserv_raw(data):
         return
     sendLine = " ".join(data[4:])
     sendRaw("{}{}".format(sendLine, NEW_LINES))
+    if is_channel(data[2]) == False:
+        sendRaw("{} P {} :[{}] {}{}".format(JUPE_NUMERIC, JUPESERV_CHAN, data[0], sendLine, NEW_LINES))
+        # `-> Prevent abuse. (Although this will tell you the numeric of the user, not the nick.)
     sendString(data[0], JUPESERV_RPL_DONE)
 
 
@@ -121,7 +124,7 @@ def parse_P10_info(data):
     sendRaw("{} 374 {} :{}{}".format(JUPE_NUMERIC, data[0], RPL_ENDOFINFO, NEW_LINES))
 
 def parse_P10_kill(data):
-    # <numeric> <D|KILL> <numeric> :<reason>
+    # <numeric> <D|KILL> <target numeric> :<reason>
 
     line = data.split(" ")
     if line[2] in JUPESERV_AUTHED:
@@ -141,14 +144,14 @@ def parse_P10_ping(data):
 def parse_P10_privmsg(data):
     # <numeric> P[RIVMSG] <target> :<message>
     #
-    # Note: Target will either be a channel, numeric, or <bot>@<server>.
+    # Note: Target will either be a channel, numeric, or <bot>@<server>. (So any multi-target messages are split over several lines.)
 
     line = data.split(" ")
     command = line[3][1:].lower()
     command = command.strip(NEW_LINES)
     # ¦-> So, when regular users get raw data on bircd, there isn't any \n on the end of a PRIVMSG line.
     # ¦-> However, with servers, this is a completely different story. There is an \n appended to the end of the line.
-    # `-> As a result of this annoyance, I'm stripping NEW_LINES from the command name.
+    # `-> As a result of this mild annoyance, I'm stripping NEW_LINES from the command name.
     if line[2] != JUPESERV_NUMERIC and line[2] != JUPESERV_SECURE:
         if command[0] != JUPESERV_TRIGGER:
             return
@@ -244,12 +247,13 @@ JUPESERV_BOT = "JupeServ"
 JUPESERV_TRIGGER = "?"
 JUPESERV_ENABLED = 1
 JUPESERV_REPLY_METHOD = "O"
-# `-> This is a NOTICE (P10 = O). If you want PRIVMSG, use P.
+# `-> This is a NOTICE (P10 = O). If you want PRIVMSG, use P. (PRIVMSG works too.)
 JUPESERV_SALT = "changeme"
 JUPESERV_USERS = {
-    "changeme": "98d21743a2586d3eda1f45c097f7239c5ab9bd770d515f91d510972b1e4d7925c5f3e72a46b0bb1f68f0c43efb2bd5635b7ff1391d16121af4b44896609a6f0d"
+    "changeme": "a5eb61c9170a54325ee8c75d74611a721cb9a782d4d2ead1b808f430c8568b333c51b180eff98f0113d0b2e9fb70c9bc6b991ce91c02041eecc9820c55113f73"
 }
 # ¦-> Names and sha512 passwords must be in lowercase. To use this, connect to the IRCd and type: /msg <bot>@<server> MKPASSWD <password>
+# ¦-> Then use the hash that was generated in here.
 # `-> The hash is unsalted 128 character junk input, by the way.
 
 JUPESERV_COMMANDS = {
@@ -334,15 +338,16 @@ def main():
     # `-> NOTE: In case of adding a new server post END_OF_BURST, flags must be specified! Even if it's just + otherwise the server _WILL_ SQUIT.
     if JUPESERV_ENABLED == 1:
         sendRaw("{} N {} 1 {} {} {} +iko {} {} :{}{}".format(JUPE_NUMERIC, JUPESERV_BOT, JUPE_EPOCH, JUPESERV_BOT, JUPE_NAME, inttobase64(2130706433, 6), JUPESERV_NUMERIC, JUPESERV_BOT, NEW_LINES))
-        # ¦-> <numeric> N[ICK] <hop count> <timestamp> <user> <host> +<modes> [account|fakehost] [account|fakehost] <ip as base64 numeric> <numeric> :<real name>
+        # ¦-> <numeric> N[ICK] <hop count> <timestamp> <user> <host> [+modes] [modeargs ...] <ip as base64 numeric> <numeric> :<real name>
         # ¦
         # `-> Here, we create a user on the server.
         sendRaw("{} B {} {} +inst {}:o{}".format(JUPE_NUMERIC, JUPESERV_CHAN, JUPE_EPOCH, JUPESERV_NUMERIC, NEW_LINES))
-        # ¦-> Initial:  <numeric> B[URST] <#channel> <timestamp> <modes> [args] <numeric[:status>[,<numeric[:status>],...]] [:%n!u@h n!u@h ...]
+        # ¦-> Initial:  <numeric> B[URST] <#channel> <timestamp> [modes] [modeargs ...] <numeric[:status>[,<numeric[:status>],...]] [:%n!u@h n!u@h ...]
         # ¦-> Overflow: <numeric> B[URST] <#channel> <timestamp> [{numeric[:status}[,{numeric[:status}],...]] [:%n!u@h n!u@h ...]
         # ¦
         # ¦-> "Create" a channel upon connection. This line pretends that the channel already exists, and we're just BURSTing that information.
-        # `-> However, if the channel already exists, the older timestamp takes priority. (So in that case the bot won't be opped.)
+        # ¦-> However, if the channel already exists, the older timestamp takes priority. (So in that case the bot won't be opped.)
+        # `-> Interesting sideline here, topics are not sent on bursting.
     sendRaw("{} EB{}".format(JUPE_NUMERIC, NEW_LINES))
     # `-> END_OF_BURST
 
