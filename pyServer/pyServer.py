@@ -342,7 +342,7 @@ def main():
         # ¦
         # `-> Here, we create a user on the server.
         sendRaw("{} B {} {} +inst {}:o{}".format(JUPE_NUMERIC, JUPESERV_CHAN, JUPE_EPOCH, JUPESERV_NUMERIC, NEW_LINES))
-        # ¦-> Initial:  <numeric> B[URST] <#channel> <timestamp> [modes] [modeargs ...] <numeric[:status>[,<numeric[:status>],...]] [:%n!u@h n!u@h ...]
+        # ¦-> Initial:  <numeric> B[URST] <#channel> <timestamp> [+modes] [modeargs ...] <numeric[:status>[,<numeric[:status>],...]] [:%n!u@h n!u@h ...]
         # ¦-> Overflow: <numeric> B[URST] <#channel> <timestamp> [{numeric[:status}[,{numeric[:status}],...]] [:%n!u@h n!u@h ...]
         # ¦
         # ¦-> "Create" a channel upon connection. This line pretends that the channel already exists, and we're just BURSTing that information.
