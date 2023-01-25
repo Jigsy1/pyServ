@@ -28,6 +28,7 @@
 # include(s):
 
 import hashlib
+import re
 import socket
 import time
 
@@ -56,7 +57,7 @@ def parse_jupeserv_auth(data):
     if account not in JUPESERV_USERS:
         sendString(data[0], "That account does not exist.")
         return
-    password = data[5].strip(NEW_LINES)
+    password = data[5]
     password = "(" + str(JUPESERV_SALT) + ":" + password + ")"
     password = password.encode("UTF-8")
     output = hashlib.sha512(password).hexdigest().lower()
@@ -69,7 +70,7 @@ def parse_jupeserv_auth(data):
 def parse_jupeserv_help(data):
     # HELP
 
-    sendString(data[0], "The following command(s) are available.")
+    sendString(data[0], "The following command(s) are available:")
     sendString(data[0], "----------------------------------------")
     for item in JUPESERV_COMMANDS:
         string = item + " " + JUPESERV_COMMANDS_HELP[item]
@@ -87,7 +88,7 @@ def parse_jupeserv_mkpasswd(data):
     if len(data[3:]) == 1:
         sendString(data[0], JUPESERV_ERR_NEEDMOREARGS)
         return
-    userInput = data[4].strip(NEW_LINES)
+    userInput = data[4]
     userInput = "(" + str(JUPESERV_SALT) + ":" + userInput + ")"
     userInput = userInput.encode("UTF-8")
     output = hashlib.sha512(userInput).hexdigest().lower()
@@ -103,10 +104,10 @@ def parse_jupeserv_raw(data):
         sendString(data[0], JUPESERV_ERR_NEEDMOREARGS)
         return
     sendLine = " ".join(data[4:])
-    sendRaw("{}{}".format(sendLine, NEW_LINES))
+    sendRaw("{}{}".format(sendLine, NEWLINE))
     if is_channel(data[2]) == False:
-        sendRaw("{} P {} :[{}] {}{}".format(JUPE_NUMERIC, JUPESERV_CHAN, data[0], sendLine, NEW_LINES))
-        # `-> Prevent abuse. (Although this will tell you the numeric of the user, not the nick.)
+        sendRaw("{} P {} :[{}] {}{}".format(JUPE_NUMERIC, JUPESERV_CHAN, data[0], sendLine, NEWLINE))
+        # `-> Prevent abuse. (Although for now, this will only tell you the numeric of the user, not the nick.)
     sendString(data[0], JUPESERV_RPL_DONE)
 
 
@@ -119,9 +120,9 @@ def parse_P10_info(data):
     # <numeric> <F|INFO> <server numeric>
 
     data = data.split(" ")
-    sendRaw("{} 371 {} :{}{}".format(JUPE_NUMERIC, data[0], JUPE_NAME, NEW_LINES))
-    sendRaw("{} 371 {} :{}{}".format(JUPE_NUMERIC, data[0], JUPE_INFO, NEW_LINES))
-    sendRaw("{} 374 {} :{}{}".format(JUPE_NUMERIC, data[0], RPL_ENDOFINFO, NEW_LINES))
+    sendRaw("{} 371 {} :{}{}".format(JUPE_NUMERIC, data[0], JUPE_NAME, NEWLINE))
+    sendRaw("{} 371 {} :{}{}".format(JUPE_NUMERIC, data[0], JUPE_INFO, NEWLINE))
+    sendRaw("{} 374 {} :{}{}".format(JUPE_NUMERIC, data[0], RPL_ENDOFINFO, NEWLINE))
 
 def parse_P10_kill(data):
     # <numeric> <D|KILL> <target numeric> :<reason>
@@ -133,12 +134,12 @@ def parse_P10_kill(data):
 def parse_P10_motd(data):
     # <numeric> MO[TD] <server numeric>
 
-    sendRaw("{} 422 {} :{}{}".format(JUPE_NUMERIC, data.split(" ")[0], ERR_NOMOTD, NEW_LINES))
+    sendRaw("{} 422 {} :{}{}".format(JUPE_NUMERIC, data.split(" ")[0], ERR_NOMOTD, NEWLINE))
 
 def parse_P10_ping(data):
     # <numeric> <G|PING> [:]<arg>
 
-    sendRaw("{} Z {}{}".format(JUPE_NUMERIC, data.split(" ")[2], NEW_LINES))
+    sendRaw("{} Z {}{}".format(JUPE_NUMERIC, data.split(" ")[2], NEWLINE))
     # `-> Saying PONG instead of Z should also work; but let's just leave it alone.
 
 def parse_P10_privmsg(data):
@@ -148,10 +149,6 @@ def parse_P10_privmsg(data):
 
     line = data.split(" ")
     command = line[3][1:].lower()
-    command = command.strip(NEW_LINES)
-    # ¦-> So, when regular users get raw data on bircd, there isn't any \n on the end of a PRIVMSG line.
-    # ¦-> However, with servers, this is a completely different story. There is an \n appended to the end of the line.
-    # `-> As a result of this mild annoyance, I'm stripping NEW_LINES from the command name.
     if line[2] != JUPESERV_NUMERIC and line[2] != JUPESERV_SECURE:
         if command[0] != JUPESERV_TRIGGER:
             return
@@ -172,7 +169,7 @@ def parse_P10_quit(data):
 def parse_P10_time(data):
     # <numeric> TI[ME] <server numeric>
 
-    sendRaw("{} 391 {} {}{}".format(JUPE_NUMERIC, data.split(" ")[0], RPL_TIME.format(JUPE_NAME, str(int(time.time())), 0, time.strftime("%A %B %d %Y -- %H:%M:%S %z")), NEW_LINES))
+    sendRaw("{} 391 {} {}{}".format(JUPE_NUMERIC, data.split(" ")[0], RPL_TIME.format(JUPE_NAME, str(int(time.time())), 0, time.strftime("%A %B %d %Y -- %H:%M:%S %z")), NEWLINE))
     # `-> 0 is offset. I don't know what to put here, so I'm leaving it as zero.
 
 
@@ -231,10 +228,10 @@ def mid(string, offset, amount):
 
 def sendRaw(data):
     jupe.send(data.encode("UTF-8"))
-    print(data.strip(NEW_LINES))
+    print(" ".join(re.split(NEWLINE_REGEX, data)))
 
 def sendString(numeric, string):
-    sendRaw("{} {} {} :{}{}".format(JUPESERV_NUMERIC, JUPESERV_REPLY_METHOD, numeric, string, NEW_LINES))
+    sendRaw("{} {} {} :{}{}".format(JUPESERV_NUMERIC, JUPESERV_REPLY_METHOD, numeric, string, NEWLINE))
 
 
 # define(s):
@@ -250,7 +247,7 @@ JUPESERV_REPLY_METHOD = "O"
 # `-> This is a NOTICE (P10 = O). If you want PRIVMSG, use P. (PRIVMSG works too.)
 JUPESERV_SALT = "changeme"
 JUPESERV_USERS = {
-    "changeme": "a5eb61c9170a54325ee8c75d74611a721cb9a782d4d2ead1b808f430c8568b333c51b180eff98f0113d0b2e9fb70c9bc6b991ce91c02041eecc9820c55113f73"
+    "changeme": "1fb1370afaffdc08a5cc582fb082366e7f84fd6c593bba9f1f49346e61912face20aaee514697e6c88d99cce9e4b2dc1183f89e3cabf925f196e3465438d9f20"
 }
 # ¦-> Names and sha512 passwords must be in lowercase. To use this, connect to the IRCd and type: /msg <bot>@<server> MKPASSWD <password>
 # ¦-> Then use the hash that was generated in here.
@@ -263,10 +260,10 @@ JUPESERV_COMMANDS = {
     "raw": parse_jupeserv_raw
 }
 JUPESERV_COMMANDS_HELP = {
-    "auth": "- AUTH <account> <password> (Auth to {} to use RAW.)".format(JUPESERV_BOT),
+    "auth": "- AUTH <account> <password> (Auth to {} in order to use RAW.)".format(JUPESERV_BOT),
     "help": "- HELP (Lists all available commands.)",
     "mkpasswd": "- MKPASSWD <input> (Encrypts a string for password use.)",
-    "raw": "- RAW <args> (Send raw args. This requires knowledge of what you're doing.)"
+    "raw": "- RAW <args> (Send raw args. This requires knowledge of what you're doing.) [RESTRICTED]"
 }
 # `-> /msg <bot> HELP
 
@@ -320,7 +317,11 @@ JUPESERV_ERR_NOTPUBLIC = "Security violation. You may not use this command publi
 JUPESERV_ERR_USESECURE = "Security violation. Please /msg {} <command> [args] instead.".format(JUPESERV_SECURE)
 JUPESERV_RPL_DONE = "Done."
 
-NEW_LINES = "\r\n"
+NEWLINE = "\r\n"
+# `-> Send in this order.
+
+NEWLINE_REGEX = r"[\n\r]+"
+# `-> For splitting.
 
 jupe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 jupe.connect((JUPE_SERVER, JUPE_PORT))
@@ -328,27 +329,27 @@ jupe.connect((JUPE_SERVER, JUPE_PORT))
 # Core:
 
 def main():
-    sendRaw("PASS :{}{}".format(JUPE_PASSWORD, NEW_LINES))
+    sendRaw("PASS :{}{}".format(JUPE_PASSWORD, NEWLINE))
     # `-> PASS must _ALWAYS_ come first.
-    sendRaw("SERVER {} 1 {} {} J10 {}]]] {} :{}{}".format(JUPE_NAME, JUPE_EPOCH, JUPE_EPOCH, JUPE_NUMERIC, JUPE_FLAGS, JUPE_INFO, NEW_LINES))
+    sendRaw("SERVER {} 1 {} {} J10 {}]]] {} :{}{}".format(JUPE_NAME, JUPE_EPOCH, JUPE_EPOCH, JUPE_NUMERIC, JUPE_FLAGS, JUPE_INFO, NEWLINE))
     # ¦-> SERVER <our server name> <hop count> <connection time> <link time> <protocol> <our server numeric><max users as numeric> [+flags] :<description>
     # ¦
     # ¦-> We're joining the server, so we use J10, not P10. And ]]] means the maximum number of users allowed. (262,143)
     # ¦-> Flags may or may not being used here; but +s would mean Services. E.g. ... J10 SV]]] +s :IRC Services
     # `-> NOTE: In case of adding a new server post END_OF_BURST, flags must be specified! Even if it's just + otherwise the server _WILL_ SQUIT.
     if JUPESERV_ENABLED == 1:
-        sendRaw("{} N {} 1 {} {} {} +iko {} {} :{}{}".format(JUPE_NUMERIC, JUPESERV_BOT, JUPE_EPOCH, JUPESERV_BOT, JUPE_NAME, inttobase64(2130706433, 6), JUPESERV_NUMERIC, JUPESERV_BOT, NEW_LINES))
+        sendRaw("{} N {} 1 {} {} {} +iko {} {} :{}{}".format(JUPE_NUMERIC, JUPESERV_BOT, JUPE_EPOCH, JUPESERV_BOT, JUPE_NAME, inttobase64(2130706433, 6), JUPESERV_NUMERIC, JUPESERV_BOT, NEWLINE))
         # ¦-> <numeric> N[ICK] <hop count> <timestamp> <user> <host> [+modes] [modeargs ...] <ip as base64 numeric> <numeric> :<real name>
         # ¦
         # `-> Here, we create a user on the server.
-        sendRaw("{} B {} {} +inst {}:o{}".format(JUPE_NUMERIC, JUPESERV_CHAN, JUPE_EPOCH, JUPESERV_NUMERIC, NEW_LINES))
+        sendRaw("{} B {} {} +inst {}:o{}".format(JUPE_NUMERIC, JUPESERV_CHAN, JUPE_EPOCH, JUPESERV_NUMERIC, NEWLINE))
         # ¦-> Initial:  <numeric> B[URST] <#channel> <timestamp> [+modes] [modeargs ...] <numeric[:status>[,<numeric[:status>],...]] [:%n!u@h n!u@h ...]
         # ¦-> Overflow: <numeric> B[URST] <#channel> <timestamp> [{numeric[:status}[,{numeric[:status}],...]] [:%n!u@h n!u@h ...]
         # ¦
         # ¦-> "Create" a channel upon connection. This line pretends that the channel already exists, and we're just BURSTing that information.
         # ¦-> However, if the channel already exists, the older timestamp takes priority. (So in that case the bot won't be opped.)
         # `-> Interesting sideline here, topics are not sent on bursting.
-    sendRaw("{} EB{}".format(JUPE_NUMERIC, NEW_LINES))
+    sendRaw("{} EB{}".format(JUPE_NUMERIC, NEWLINE))
     # `-> END_OF_BURST
 
     while 1:
@@ -356,10 +357,10 @@ def main():
         if not data:
             break
         print(data)
-        if len(data.strip(NEW_LINES)) == 0:
+        splitData = re.split(NEWLINE_REGEX, data)
+        if len(splitData) == 1 and splitData[0] == "":
             return
-        newData = data.split(NEW_LINES)
-        for line in newData:
+        for line in splitData:
             newLine = line.split(" ")
             if len(newLine) > 1:
                 if newLine[1] in P10_COMMANDS:
@@ -368,7 +369,7 @@ def main():
                 parse_P10_command(newLine[0], line)
     jupe.close()
     print("Socket closed.\n")
-    # JUPESERV_AUTHED.clear()
+    JUPESERV_AUTHED.clear()
     # `-> Probably redundant.
 
 if __name__ == "__main__":
